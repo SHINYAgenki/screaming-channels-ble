@@ -16,9 +16,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: ビルドして実行
+      - name: Build and run
         run: make -C firmware/tests
 
-      - name: クリーンアップ
+      - name: Clean up
         if: always()
         run: make -C firmware/tests clean
