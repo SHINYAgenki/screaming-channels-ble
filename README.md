@@ -95,21 +95,24 @@ uv run python3 tests/test_board_aes.py --port /dev/tty.usbmodem...
 
 ### 1-4. SDR 収集時の Python と SoapySDR
 
-通常開発と AES 検証は `.python-version` の Python 3.12.13 を使います。
+Homebrew の `soapysdr` は Python バインディングを `python@3.14` 向けにインストールします。
+本プロジェクトは `.python-version` で Python 3.14 を使用しているため、追加の設定は不要です。
 
-ただし Homebrew の `soapysdr` は Python バインディングを
-Homebrew の `python@3.14` 向けにインストールするため、HackRF 収集時だけ
-`uv run --python 3.14` と `PYTHONPATH` を使います。
+`collector.py` が起動時に `brew --prefix soapysdr` からバインディングパスを自動検出して
+`sys.path` に追加するため、`PYTHONPATH` の設定も不要です。
+
+動作確認:
 
 ```bash
-export PYTHONPATH="$(brew --prefix soapysdr)/lib/python3.14/site-packages:$PYTHONPATH"
-
-# 動作確認
-uv run --python 3.14 python -c "import SoapySDR; print('SoapySDR OK')"
+PYTHONPATH="$(brew --prefix soapysdr)/lib/python3.14/site-packages" \
+  uv run python -c "import SoapySDR; print('SoapySDR OK')"
 ```
 
-SoapyHackRF のプラグインパスは `collector.py` が Homebrew の標準配置から自動検出します。
-もし `SoapySDR::Device::make() no match` が出る場合は、以下も設定してください。
+> この確認コマンドのみ `PYTHONPATH` が必要です。実際の波形収集 (`collector.py` の実行) では
+> スクリプト内で自動的にパスを追加するため `PYTHONPATH` は不要です。
+
+SoapyHackRF のプラグインパスも `collector.py` が Homebrew の標準配置から自動検出します。
+もし `SoapySDR::Device::make() no match` が出る場合は、以下を設定してください。
 
 ```bash
 export SOAPY_SDR_PLUGIN_PATH="$(brew --prefix soapyhackrf)/lib/SoapySDR/modules0.8"
@@ -248,13 +251,15 @@ python3 tests/test_board_aes.py --port /dev/tty.usbmodem0006823689621
 HackRF と PCA10040 DK を接続し、以下を実行します:
 
 ```bash
-PYTHONPATH="$(brew --prefix soapysdr)/lib/python3.14/site-packages:$PYTHONPATH" \
-uv run --python 3.14 python collection/collector.py \
+uv run python collection/collector.py \
     --config collection/config/default.json \
     --port /dev/tty.usbmodem0006823689621 \
     --output ./traces \
     --num-traces 200
 ```
+
+> `PYTHONPATH` や `--python 3.14` の指定は不要です。プロジェクトは Python 3.14 を使用しており、
+> SoapySDR の Homebrew バインディングは `collector.py` が自動で `sys.path` に追加します。
 
 収集結果:
 
