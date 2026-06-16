@@ -1,0 +1,24 @@
+name: Test
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  aes-unit-test:
+    name: AES128 C ユニットテスト
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build and run
+        run: make -C firmware/tests
+
+      - name: Clean up
+        if: always()
+        run: make -C firmware/tests clean
