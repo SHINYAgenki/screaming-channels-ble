@@ -20,3 +20,6 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+
+# nRF5 SDK
+nRF5_SDK_14.2.0_17b948a
