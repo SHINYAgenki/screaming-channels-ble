@@ -71,7 +71,17 @@ def analyze_trigger(
 
     envelope = sosfilt(lp_sos, np.abs(sosfilt(bp_sos, amplitude)))
 
-    threshold = envelope.mean()
+    # 元の analyze.py に準拠した適応的閾値:
+    # AES バーストの duty cycle が低い場合 (mean < 1.1 * midrange) に
+    # mean を最大値寄りに引き上げてトリガ感度を上げる。
+    average = float(envelope.mean())
+    maximum = float(envelope.max())
+    minimum = float(envelope.min())
+    middle = (maximum - minimum) / 2.0
+    if average < 1.1 * middle:
+        average = average + (maximum - average) / 2.0
+    threshold = average
+
     offset_samples = -int(cfg["trigger_offset"] * cfg["sampling_rate"])
 
     above = envelope > threshold if cfg["trigger_rising"] else envelope < threshold
@@ -147,20 +157,11 @@ def save_waveform_plot(
         axes[2].set_xlabel("time [us]")
         axes[2].set_ylabel("normalized amplitude")
 
-        avg = trace_amp.mean(axis=0)
-        std = trace_amp.std(axis=0)
-        axes[3].plot(trace_time_us, _normalize(avg), color="tab:red", label="average")
-        if np.max(std) > 0:
-            axes[3].plot(
-                trace_time_us,
-                _normalize(std),
-                color="tab:blue",
-                alpha=0.55,
-                label="std",
-            )
-        axes[3].set_title("Average trace")
+        avg_trace = trace_amp.mean(axis=0)
+        axes[3].plot(trace_time_us, avg_trace, color="tab:red", linewidth=1.5, label=f"average ({len(trace_amp)} traces)")
+        axes[3].set_title("Average of all traces")
         axes[3].set_xlabel("time [us]")
-        axes[3].set_ylabel("normalized amplitude")
+        axes[3].set_ylabel("amplitude")
         axes[3].legend(loc="upper right")
 
     output_file.parent.mkdir(parents=True, exist_ok=True)
@@ -184,6 +185,27 @@ def _set_default_soapy_plugin_path() -> None:
         return
 
 
+def _ensure_soapy_python_path() -> None:
+    """Homebrew の soapysdr Python バインディングを sys.path に追加する。
+
+    Homebrew は soapysdr の Python バインディングをシステム Python (python@3.14) 向けに
+    インストールするため、uv 仮想環境からは見えない。brew --prefix で prefix を取得して
+    現在の Python バージョンに合わせたパスを sys.path に挿入する。
+    """
+    import subprocess
+
+    ver = f"{sys.version_info.major}.{sys.version_info.minor}"
+    try:
+        prefix = subprocess.check_output(
+            ["brew", "--prefix", "soapysdr"], text=True, stderr=subprocess.DEVNULL
+        ).strip()
+        site = f"{prefix}/lib/python{ver}/site-packages"
+        if site not in sys.path:
+            sys.path.insert(0, site)
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        pass
+
+
 class HackRFCapture:
     """同期 IQ キャプチャのための SoapySDR 薄ラッパー。"""
 
@@ -197,6 +219,7 @@ class HackRFCapture:
         self._stream = None
 
     def open(self) -> None:
+        _ensure_soapy_python_path()
         _set_default_soapy_plugin_path()
 
         try:
@@ -236,6 +259,21 @@ class HackRFCapture:
                 buf[received : received + ret.ret] = chunk[: ret.ret]
                 received += ret.ret
         return buf
+
+    def drain(self, duration: float = 0.005) -> None:
+        """蓄積バッファを捨てて次のキャプチャを直近サンプルから始める。"""
+        if self._sdr is None or self._stream is None:
+            return
+        n = int(duration * self._fs)
+        chunk = np.zeros(min(4096, n), dtype=np.complex64)
+        drained = 0
+        deadline = time.monotonic() + duration * 3
+        while drained < n and time.monotonic() < deadline:
+            ret = self._sdr.readStream(
+                self._stream, [chunk], min(4096, n - drained)
+            )
+            if ret.ret > 0:
+                drained += ret.ret
 
     def close(self) -> None:
         if self._sdr and self._stream:
@@ -358,17 +396,33 @@ def collect(
         ser.write(b"A")
         _uart_wait_for(ser, "AES mode\r\n")
 
-        # トリガあたりの繰り返し回数を 1 に固定
-        ser.write(b"N1\n")
-        _uart_wait_for(ser, "N=1\r\n")
+        # 繰り返し回数: num_reps 回の同一 (K,P) AES を 1 キャプチャに収めて平均 → SNR が √N 倍改善
+        # 元の screaming_channels は n2000 で 2000 回繰り返しを使っていた
+        num_reps = int(cfg.get("num_reps", 1))
+        rep_cmd = f"N{num_reps}\n".encode()
+        rep_ack = f"N={num_reps}\r\n"
+        ser.write(rep_cmd)
+        _uart_wait_for(ser, rep_ack)
+        print(f"  繰り返し回数: {num_reps} reps/capture")
 
         key = bytes(random.randint(0, 255) for _ in range(16))
         _uart_set_bytes16(ser, b"K", "鍵", key)
 
         sig_samples = int(cfg["signal_length"] * cfg["sampling_rate"])
-        capture_samples = (
-            int(cfg["trigger_offset"] * cfg["sampling_rate"]) + sig_samples + 512
-        )
+        fs = cfg["sampling_rate"]
+
+        # 1 キャプチャの長さ:
+        #   - num_reps=1 : capture_length (20ms) — UART遅延バッファ込み
+        #   - num_reps>1 : N 回分の AES + 先頭マージン (20ms)
+        overhead_samples = int(cfg.get("capture_length", 0.02) * fs)
+        if num_reps > 1:
+            capture_samples = overhead_samples + num_reps * sig_samples
+        else:
+            capture_samples = overhead_samples
+
+        # N 回の AES 完了を待つタイムアウト (1 回あたり最大 5ms、余裕を 2 倍)
+        ok_timeout = max(5.0, num_reps * 0.005 * 2)
+
         attempt_limit = max_attempts or max(num_traces * 5, num_traces + 20)
 
         i = 0
@@ -382,31 +436,55 @@ def collect(
             pt = bytes(random.randint(0, 255) for _ in range(16))
             _uart_set_bytes16(ser, b"P", "平文", pt)
 
-            # AES 実行とキャプチャを同時に開始
+            # K+P+N UART 交換で蓄積したバッファ (最大 25ms) を全部捨ててから R を送信
+            # 参考実装では K+P を録音前に送り GNUradio 開始後に action command を送信する。
+            # ここでは drain(0.025) で同等の効果を得る: AES SubBytes の RF 信号のみ
+            # bandpass trigger に現れ、UART ノイズは混入しない。
+            sdr.drain(0.025)
             ser.write(b"R")
             raw = sdr.read(capture_samples)
-            _uart_wait_for(ser, "OK\r\n", timeout=2.0)
+            _uart_wait_for(ser, "OK\r\n", timeout=ok_timeout)
             if preview_raw is None:
                 preview_raw = raw
 
             edges = find_trigger_edges(cfg, raw)
             if len(edges) == 0:
-                print(f"  [skip] attempt {attempts}: トリガが見つかりません")
+                amp = np.abs(raw)
+                print(
+                    f"  [skip] attempt {attempts}: トリガが見つかりません "
+                    f"(amp min={amp.min():.3f} max={amp.max():.3f} mean={amp.mean():.3f})"
+                )
                 continue
 
-            start = int(edges[0])
-            if start < 0 or start + sig_samples > len(raw):
-                print(f"  [skip] attempt {attempts}: ウィンドウが範囲外です")
+            # 各エッジからサブトレースを抽出して平均 (同一 K,P の繰り返しなので平均で SNR↑)
+            sub_traces: list[np.ndarray] = []
+            for edge in edges:
+                start = max(0, int(edge))   # drain後にedgeが負になる場合は0にクリップ
+                if start + sig_samples <= len(raw):
+                    sub_traces.append(
+                        np.abs(raw[start : start + sig_samples]).astype(np.float32)
+                    )
+
+            if len(sub_traces) == 0:
+                print(
+                    f"  [skip] attempt {attempts}: ウィンドウが範囲外 "
+                    f"(edges={edges[:3]}, buf={len(raw)})"
+                )
                 continue
 
             preview_raw = raw
-            traces.append(raw[start : start + sig_samples])
+            # 複数サブトレースの平均 → 1 ポイントの代表トレース (sc_2000.npy と同形式)
+            trace = np.mean(sub_traces, axis=0).astype(np.float32)
+            traces.append(trace)
             plaintexts.append(list(pt))
             keys_used.append(list(key))
             i += 1
 
             if i % 10 == 0 or i == num_traces:
-                print(f"  収集済み {i}/{num_traces} (attempts={attempts})")
+                print(
+                    f"  収集済み {i}/{num_traces} "
+                    f"(attempt={attempts}, sub_traces={len(sub_traces)}/{num_reps})"
+                )
 
         if len(traces) < num_traces:
             print(
@@ -428,7 +506,7 @@ def collect(
             ser.close()
         sdr.close()
 
-    traces_arr = np.array(traces, dtype=np.complex64)
+    traces_arr = np.array(traces, dtype=np.float32)
     pt_arr = np.array(plaintexts, dtype=np.uint8)
     keys_arr = np.array(keys_used, dtype=np.uint8)
 
