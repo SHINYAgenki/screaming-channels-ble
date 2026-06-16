@@ -11,8 +11,8 @@ import argparse
 import sys
 from pathlib import Path
 
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 from scipy.signal import butter, filtfilt
 
 
@@ -52,7 +52,8 @@ def plot(traces, plaintexts, keys, index: int, sampling_rate=5e6, save_path=None
 
     fig, axes = plt.subplots(4, 1, figsize=(14, 12), sharex=True)
     fig.suptitle(
-        f"Screaming Channel Traces  ({n_traces} traces × {n_samples} samples @ {sampling_rate/1e6:.1f} MHz)",
+        f"Screaming Channel Traces  ({n_traces} traces × {n_samples}"
+        f"samples @ {sampling_rate / 1e6:.1f} MHz)",
         fontsize=12,
     )
 
@@ -61,7 +62,11 @@ def plot(traces, plaintexts, keys, index: int, sampling_rate=5e6, save_path=None
     axes[0].set_title(f"Single trace  (index={index})")
     axes[0].set_ylabel("amplitude")
     if plaintexts is not None and index < len(plaintexts):
-        pt_hex = plaintexts[index].tobytes().hex() if plaintexts[index].dtype == np.uint8 else ""
+        pt_hex = (
+            plaintexts[index].tobytes().hex()
+            if plaintexts[index].dtype == np.uint8
+            else ""
+        )
         axes[0].set_xlabel(f"plaintext: {pt_hex}", fontsize=8)
 
     # Panel 2: 全トレースのオーバーレイ (最大 50 本、透明度を下げる)
@@ -69,7 +74,9 @@ def plot(traces, plaintexts, keys, index: int, sampling_rate=5e6, save_path=None
     alpha = max(0.03, 1.0 / max_overlay)
     for i in range(max_overlay):
         axes[1].plot(t_us, traces[i], color="tab:gray", linewidth=0.4, alpha=alpha)
-    axes[1].plot(t_us, average, color="tab:red", linewidth=1.2, label="average", zorder=10)
+    axes[1].plot(
+        t_us, average, color="tab:red", linewidth=1.2, label="average", zorder=10
+    )
     axes[1].set_title(f"Overlay ({max_overlay} traces) + average")
     axes[1].set_ylabel("amplitude")
     axes[1].legend(loc="upper right")
@@ -84,7 +91,9 @@ def plot(traces, plaintexts, keys, index: int, sampling_rate=5e6, save_path=None
         avg_lpf = lowpass(average, cutoff=30e3, fs=sampling_rate)
     except Exception:
         avg_lpf = average
-    axes[3].plot(t_us, average, color="tab:red", linewidth=0.8, alpha=0.4, label="average")
+    axes[3].plot(
+        t_us, average, color="tab:red", linewidth=0.8, alpha=0.4, label="average"
+    )
     axes[3].plot(t_us, avg_lpf, color="tab:orange", linewidth=1.5, label="LPF 30 kHz")
     axes[3].set_title("Average + LPF (round structure)")
     axes[3].set_ylabel("amplitude")
@@ -103,18 +112,43 @@ def plot(traces, plaintexts, keys, index: int, sampling_rate=5e6, save_path=None
 def main():
     parser = argparse.ArgumentParser(description="View screaming channel traces")
     parser.add_argument("traces_dir", type=Path, help="traces/ ディレクトリ")
-    parser.add_argument("--index", type=int, default=0, help="表示する単一トレースのインデックス (デフォルト 0)")
-    parser.add_argument("--save", type=str, default=None, help="画像ファイルへ保存するパス (省略時は画面表示)")
-    parser.add_argument("--fs", type=float, default=5e6, help="サンプリングレート (Hz, デフォルト 5e6)")
+    parser.add_argument(
+        "--index",
+        type=int,
+        default=0,
+        help="表示する単一トレースのインデックス (デフォルト 0)",
+    )
+    parser.add_argument(
+        "--save",
+        type=str,
+        default=None,
+        help="画像ファイルへ保存するパス (省略時は画面表示)",
+    )
+    parser.add_argument(
+        "--fs", type=float, default=5e6, help="サンプリングレート (Hz, デフォルト 5e6)"
+    )
     args = parser.parse_args()
 
     traces, plaintexts, keys = load_dir(args.traces_dir)
     n_traces, n_samples = traces.shape
     duration_ms = n_samples / args.fs * 1e3
-    print(f"Loaded: {n_traces} traces × {n_samples} samples  ({duration_ms:.2f} ms per trace)")
-    print(f"  amplitude  min={traces.min():.4f}  max={traces.max():.4f}  mean={traces.mean():.4f}")
+    print(
+        f"Loaded: {n_traces} traces × {n_samples} samples"
+        f"({duration_ms:.2f} ms per trace)"
+    )
+    print(
+        f"amplitude min={traces.min():.4f}"
+        f"max={traces.max():.4f} mean={traces.mean():.4f}"
+    )
 
-    plot(traces, plaintexts, keys, index=args.index, sampling_rate=args.fs, save_path=args.save)
+    plot(
+        traces,
+        plaintexts,
+        keys,
+        index=args.index,
+        sampling_rate=args.fs,
+        save_path=args.save,
+    )
 
 
 if __name__ == "__main__":

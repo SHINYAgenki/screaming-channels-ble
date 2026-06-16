@@ -158,7 +158,13 @@ def save_waveform_plot(
         axes[2].set_ylabel("normalized amplitude")
 
         avg_trace = trace_amp.mean(axis=0)
-        axes[3].plot(trace_time_us, avg_trace, color="tab:red", linewidth=1.5, label=f"average ({len(trace_amp)} traces)")
+        axes[3].plot(
+            trace_time_us,
+            avg_trace,
+            color="tab:red",
+            linewidth=1.5,
+            label=f"average ({len(trace_amp)} traces)",
+        )
         axes[3].set_title("Average of all traces")
         axes[3].set_xlabel("time [us]")
         axes[3].set_ylabel("amplitude")
@@ -202,7 +208,7 @@ def _ensure_soapy_python_path() -> None:
         site = f"{prefix}/lib/python{ver}/site-packages"
         if site not in sys.path:
             sys.path.insert(0, site)
-    except (subprocess.CalledProcessError, FileNotFoundError):
+    except subprocess.CalledProcessError, FileNotFoundError:
         pass
 
 
@@ -269,9 +275,7 @@ class HackRFCapture:
         drained = 0
         deadline = time.monotonic() + duration * 3
         while drained < n and time.monotonic() < deadline:
-            ret = self._sdr.readStream(
-                self._stream, [chunk], min(4096, n - drained)
-            )
+            ret = self._sdr.readStream(self._stream, [chunk], min(4096, n - drained))
             if ret.ret > 0:
                 drained += ret.ret
 
@@ -396,7 +400,8 @@ def collect(
         ser.write(b"A")
         _uart_wait_for(ser, "AES mode\r\n")
 
-        # 繰り返し回数: num_reps 回の同一 (K,P) AES を 1 キャプチャに収めて平均 → SNR が √N 倍改善
+        # 繰り返し回数: num_reps 回の同一 (K,P)
+        # AES を 1 キャプチャに収めて平均 → SNR が √N 倍改善
         # 元の screaming_channels は n2000 で 2000 回繰り返しを使っていた
         num_reps = int(cfg.get("num_reps", 1))
         rep_cmd = f"N{num_reps}\n".encode()
@@ -437,7 +442,8 @@ def collect(
             _uart_set_bytes16(ser, b"P", "平文", pt)
 
             # K+P+N UART 交換で蓄積したバッファ (最大 25ms) を全部捨ててから R を送信
-            # 参考実装では K+P を録音前に送り GNUradio 開始後に action command を送信する。
+            # 参考実装では K+P を録音前に送り
+            # GNUradio 開始後に action command を送信する。
             # ここでは drain(0.025) で同等の効果を得る: AES SubBytes の RF 信号のみ
             # bandpass trigger に現れ、UART ノイズは混入しない。
             sdr.drain(0.025)
@@ -452,14 +458,16 @@ def collect(
                 amp = np.abs(raw)
                 print(
                     f"  [skip] attempt {attempts}: トリガが見つかりません "
-                    f"(amp min={amp.min():.3f} max={amp.max():.3f} mean={amp.mean():.3f})"
+                    f"(amp min={amp.min():.3f} max={amp.max():.3f}"
+                    f"mean={amp.mean():.3f})"
                 )
                 continue
 
-            # 各エッジからサブトレースを抽出して平均 (同一 K,P の繰り返しなので平均で SNR↑)
+            # 各エッジからサブトレースを抽出して平均
+            # (同一 K,P の繰り返しなので平均で SNR↑)
             sub_traces: list[np.ndarray] = []
             for edge in edges:
-                start = max(0, int(edge))   # drain後にedgeが負になる場合は0にクリップ
+                start = max(0, int(edge))  # drain後にedgeが負になる場合は0にクリップ
                 if start + sig_samples <= len(raw):
                     sub_traces.append(
                         np.abs(raw[start : start + sig_samples]).astype(np.float32)
