@@ -55,7 +55,7 @@
 /* ------------------------------------------------------------------ */
 
 #define TX_BUF_SZ 512u
-#define RX_BUF_SZ   1u
+#define RX_BUF_SZ 256u
 
 static void on_uart_error(app_uart_evt_t *evt)
 {
