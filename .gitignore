@@ -9,6 +9,9 @@
 *.d
 firmware/tests/test_aes128
 
+# claude code
+.claude/*
+
 # Python specific files
 .python-version
 
