@@ -1,0 +1,22 @@
+# Project specific files
+/work
+/inputs
+/outputs
+/logs
+
+# C build artifacts
+*.o
+*.d
+firmware/tests/test_aes128
+
+# pyenv
+.python-version
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
