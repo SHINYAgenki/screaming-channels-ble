@@ -2,13 +2,15 @@
     "target_freq":      2.528e9,
     "sampling_rate":    5e6,
     "hackrf_gain":      0,
-    "hackrf_gain_if":   35,
-    "hackrf_gain_bb":   40,
-    "bandpass_lower":   1.85e6,
-    "bandpass_upper":   1.95e6,
+    "hackrf_gain_if":   36,
+    "hackrf_gain_bb":   39,
+    "bandpass_lower":   1.75e6,
+    "bandpass_upper":   1.85e6,
     "lowpass_freq":     5e3,
     "drop_start":       0.05,
     "trigger_rising":   true,
     "trigger_offset":   1e-4,
-    "signal_length":    3e-4
+    "signal_length":    1.5e-3,
+    "capture_length":   4e-3,
+    "num_reps":         1
 }
