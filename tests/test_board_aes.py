@@ -16,23 +16,22 @@ nRF52840 DK に UART で接続し、既知の平文と鍵を送信して
 from __future__ import annotations
 
 import argparse
+import random
 import sys
 import time
-import random
 
 import serial
 
 try:
     from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 except ImportError:
-    sys.exit(
-        "依存パッケージが不足しています: pip3 install cryptography"
-    )
+    sys.exit("依存パッケージが不足しています: pip3 install cryptography")
 
 
 # ------------------------------------------------------------------ #
 # cryptography ライブラリによる AES-128 ECB 参照実装                    #
 # ------------------------------------------------------------------ #
+
 
 def reference_aes128_encrypt(key: bytes, plaintext: bytes) -> bytes:
     cipher = Cipher(algorithms.AES(key), modes.ECB())
@@ -43,6 +42,7 @@ def reference_aes128_encrypt(key: bytes, plaintext: bytes) -> bytes:
 # ------------------------------------------------------------------ #
 # UART 補助関数 (firmware/src/main.c のプロトコルに対応)                #
 # ------------------------------------------------------------------ #
+
 
 def _send_bytes16(ser: serial.Serial, data: bytes) -> None:
     line = " ".join(str(b) for b in data) + "\n"
@@ -94,6 +94,7 @@ def _read_bytes16(ser: serial.Serial, timeout: float = 3.0) -> bytes:
 # ------------------------------------------------------------------ #
 # テストランナー                                                        #
 # ------------------------------------------------------------------ #
+
 
 class BoardAesTest:
     def __init__(self, port: str, verbose: bool = False):
@@ -170,13 +171,13 @@ class BoardAesTest:
 
     # ---- FIPS 197 付録B ----
     def test_fips_b(self) -> None:
-        key   = bytes.fromhex("2b7e151628aed2a6abf7158809cf4f3c")
+        key = bytes.fromhex("2b7e151628aed2a6abf7158809cf4f3c")
         plain = bytes.fromhex("3243f6a8885a308d313198a2e0370734")
         self._run_one("FIPS-197 Appendix B", key, plain)
 
     # ---- FIPS 197 付録C.1 ----
     def test_fips_c1(self) -> None:
-        key   = bytes.fromhex("000102030405060708090a0b0c0d0e0f")
+        key = bytes.fromhex("000102030405060708090a0b0c0d0e0f")
         plain = bytes.fromhex("00112233445566778899aabbccddeeff")
         self._run_one("FIPS-197 Appendix C.1", key, plain)
 
@@ -191,7 +192,7 @@ class BoardAesTest:
     # ---- ランダムベクタ (Python 参照実装と照合) ----
     def test_random(self, count: int = 10) -> None:
         for i in range(count):
-            key   = bytes(random.randint(0, 255) for _ in range(16))
+            key = bytes(random.randint(0, 255) for _ in range(16))
             plain = bytes(random.randint(0, 255) for _ in range(16))
             self._run_one(f"random #{i + 1}", key, plain)
 
@@ -205,16 +206,23 @@ class BoardAesTest:
 # エントリポイント                                                      #
 # ------------------------------------------------------------------ #
 
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="nRF52840 の AES 出力を Python 参照実装と照合して検証する"
     )
-    parser.add_argument("--port", required=True,
-                        help="DK のシリアルポート (例: /dev/tty.usbmodem...)")
-    parser.add_argument("--random-count", type=int, default=10,
-                        help="ランダムテストベクタの本数 (既定値: 10)")
-    parser.add_argument("--verbose", action="store_true",
-                        help="全テストの鍵・平文・暗号文を表示する")
+    parser.add_argument(
+        "--port", required=True, help="DK のシリアルポート (例: /dev/tty.usbmodem...)"
+    )
+    parser.add_argument(
+        "--random-count",
+        type=int,
+        default=10,
+        help="ランダムテストベクタの本数 (既定値: 10)",
+    )
+    parser.add_argument(
+        "--verbose", action="store_true", help="全テストの鍵・平文・暗号文を表示する"
+    )
     args = parser.parse_args()
 
     print("=== Board AES verification ===\n")
