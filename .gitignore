@@ -3,6 +3,7 @@
 /inputs
 /outputs
 /logs
+/traces
 
 # C build artifacts
 *.o
