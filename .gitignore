@@ -9,6 +9,9 @@
 *.d
 firmware/tests/test_aes128
 
+# Python specific files
+.python-version
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
