@@ -9,8 +9,8 @@ nRF52840 DK に UART で接続し、既知の平文と鍵を送信して
     pip3 install pyserial cryptography
 
 使い方:
-    python3 tests/test_board_aes.py --port /dev/tty.usbmodem0010504894541
-    python3 tests/test_board_aes.py --port /dev/tty.usbmodem0010504894541 --verbose
+    uv run python3 tests/test_board_aes.py --port /dev/tty.usbmodem0010504894541
+    uv run python3 tests/test_board_aes.py --port /dev/tty.usbmodem... --verbose
 """
 
 from __future__ import annotations
