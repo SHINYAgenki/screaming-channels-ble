@@ -1,0 +1,41 @@
+name: Lint
+
+on:
+  push:
+    branches:
+      - "main"
+  pull_request:
+    branches:
+      - "main"
+  workflow_dispatch:
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v1
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: ".python-version"
+
+      - name: Install Python dependencies
+        run: uv sync --locked --group dev
+
+      # リンターチェック
+      - name: Run Ruff lint check
+        run: uv run ruff check .
+
+      # フォーマットチェック
+      - name: Run Ruff format check
+        run: uv run ruff format --check .
