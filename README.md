@@ -80,9 +80,16 @@ nRF52832 DK (PCA10040) に AES-128 を実装し、HackRF One で Screaming Chann
 
 ## 実行例・成果
 
-200〜500 トレースを収集し、AES-128 実行中の電磁サイドチャネルを可視化した結果です。
+### 実験環境
+
+PC・nRF52832 DK・HackRF One を接続して波形を収集している実際の環境です。
+
+![実験環境](docs/images/experiment-environment.jpg)
+
 
 ### 収集波形 (waveforms.png)
+
+200〜500 トレースを収集し、AES-128 実行中の電磁サイドチャネルを可視化した結果です。
 
 ![Captured waveforms](docs/images/waveforms.png)
 
